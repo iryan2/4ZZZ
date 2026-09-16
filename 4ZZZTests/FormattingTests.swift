@@ -70,4 +70,26 @@ struct ListeningProgressTests {
         #expect(source.showSlug == "goo")
         #expect(source.isLive == false)
     }
+
+    @Test("Playback sources survive a JSON round trip")
+    func sourceCoding() throws {
+        let episode = PlaybackSource.episode(
+            showSlug: "goo",
+            showName: "Goo",
+            episodeID: "ep-1",
+            title: "Goo — 9 Sep 2026",
+            start: Date(timeIntervalSince1970: 1_700_000_000),
+            guide: .digital,
+            artworkURL: URL(string: "https://example.com/art.jpg")
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let data = try encoder.encode([episode, PlaybackSource.live(.fm)])
+        let decoded = try decoder.decode([PlaybackSource].self, from: data)
+
+        #expect(decoded == [episode, .live(.fm)])
+    }
 }

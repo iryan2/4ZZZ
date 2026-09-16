@@ -21,7 +21,7 @@ enum Guide: String, Codable, Sendable, CaseIterable, Identifiable {
     }
 }
 
-enum PlaybackSource: Equatable, Sendable {
+enum PlaybackSource: Equatable, Sendable, Codable {
     case live(Guide)
     case episode(
         showSlug: String,

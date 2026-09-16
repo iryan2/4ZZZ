@@ -26,7 +26,7 @@ struct PlaybackLiveActivity: Widget {
                     }
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    statusIcon(context.state)
+                    playPauseButton(context.state)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     Text(context.state.isLive ? "LIVE" : "4ZZZ")
@@ -66,6 +66,14 @@ struct PlaybackLiveActivity: Widget {
     private func statusIcon(_ state: PlaybackActivityAttributes.ContentState) -> some View {
         Image(systemName: state.isPlaying ? "pause.circle.fill" : "play.circle.fill")
             .font(.title3)
+    }
+
+    private func playPauseButton(_ state: PlaybackActivityAttributes.ContentState) -> some View {
+        Button(intent: TogglePlaybackIntent()) {
+            statusIcon(state)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(state.isPlaying ? "Pause" : "Play")
     }
 }
 
@@ -107,8 +115,12 @@ private struct LockScreenView: View {
 
             Spacer(minLength: 8)
 
-            Image(systemName: state.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                .font(.largeTitle)
+            Button(intent: TogglePlaybackIntent()) {
+                Image(systemName: state.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                    .font(.largeTitle)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(state.isPlaying ? "Pause" : "Play")
         }
         .padding()
     }

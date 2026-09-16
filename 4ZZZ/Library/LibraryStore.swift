@@ -34,6 +34,14 @@ struct ListeningProgress: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+/// The source the player last held, so a Live Activity tap that launches the
+/// app after termination can restore it.
+struct StoredPlayback: Codable, Sendable {
+    var source: PlaybackSource
+    var wasPlaying: Bool
+    var updatedAt: Date
+}
+
 @MainActor
 @Observable
 final class LibraryStore {
@@ -41,6 +49,7 @@ final class LibraryStore {
 
     private(set) var favourites: [Program] = []
     private(set) var continueListening: [ListeningProgress] = []
+    private(set) var lastPlayback: StoredPlayback?
 
     private var saveTask: Task<Void, Never>?
     private let fileURL: URL
@@ -123,6 +132,15 @@ final class LibraryStore {
         scheduleSave()
     }
 
+    func recordLastPlayback(source: PlaybackSource?, wasPlaying: Bool) {
+        if let source {
+            lastPlayback = StoredPlayback(source: source, wasPlaying: wasPlaying, updatedAt: Date())
+        } else {
+            lastPlayback = nil
+        }
+        scheduleSave()
+    }
+
     func savedPosition(for source: PlaybackSource) -> TimeInterval? {
         guard let episodeID = source.episodeID else { return nil }
         guard let entry = continueListening.first(where: { $0.episodeID == episodeID }) else { return nil }
@@ -139,6 +157,7 @@ final class LibraryStore {
     private struct State: Codable {
         var favourites: [Program] = []
         var progress: [ListeningProgress] = []
+        var lastPlayback: StoredPlayback?
     }
 
     private func load() {
@@ -148,6 +167,7 @@ final class LibraryStore {
         guard let state = try? decoder.decode(State.self, from: data) else { return }
         favourites = state.favourites
         continueListening = state.progress
+        lastPlayback = state.lastPlayback
     }
 
     private func scheduleSave() {
@@ -160,7 +180,11 @@ final class LibraryStore {
     }
 
     func saveNow() {
-        let state = State(favourites: favourites, progress: continueListening)
+        let state = State(
+            favourites: favourites,
+            progress: continueListening,
+            lastPlayback: lastPlayback
+        )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         guard let data = try? encoder.encode(state) else { return }

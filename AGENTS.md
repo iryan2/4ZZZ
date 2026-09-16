@@ -35,8 +35,10 @@ xcodebuild -project 4ZZZ.xcodeproj -target 4ZZZ -sdk iphoneos \
   `4ZZZ/`, `4ZZZWidgets/`, `Shared/`, `4ZZZTests/` compile automatically — no
   pbxproj edit needed for ordinary files. New *targets* or build-setting changes
   must be edited by hand.
-- `Shared/` compiles into **both** the app and the widget; it holds only
-  `PlaybackActivityAttributes` (Live Activity payload). Keep app-only types out.
+- `Shared/` compiles into **both** the app and the widget; it holds the Live
+  Activity payload (`PlaybackActivityAttributes`) and the Live Activity's
+  `TogglePlaybackIntent`/`PlaybackCommandBus`. Keep app-only types out — the
+  intent talks to the player through the command bus, never directly.
 - `Config/Info.plist` and `Config/Widgets-Info.plist` are partial plists merged
   with `GENERATE_INFOPLIST_FILE = YES`. Array-valued keys (`UIBackgroundModes`,
   `NSSupportsLiveActivities`) do **not** work via `INFOPLIST_KEY_*` — they must go
