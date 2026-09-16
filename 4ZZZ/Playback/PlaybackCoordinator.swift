@@ -6,8 +6,7 @@ import UIKit
 @MainActor
 @Observable
 final class PlaybackCoordinator {
-    /// The app owns a single player. The Live Activity intent reaches it
-    /// through this instance (see `PlaybackCommandBus`).
+    /// The app owns a single player.
     static let shared = PlaybackCoordinator()
 
     enum State: Equatable {
@@ -46,7 +45,6 @@ final class PlaybackCoordinator {
     private let player = AVPlayer()
     private let nowPlaying = NowPlayingCenter()
     private let artworkLoader = ArtworkLoader()
-    private let liveActivity = LiveActivityController()
     private let audioSession = AVAudioSession.sharedInstance()
     private let sleepFadeDuration: TimeInterval = 10
 
@@ -62,34 +60,18 @@ final class PlaybackCoordinator {
     private var ticker: Task<Void, Never>?
     private var observers: [NSObjectProtocol] = []
 
-    /// Whether a Live Activity should exist for the current session. Cleared
-    /// when playback is truly over so the polling ticker cannot resurrect a
-    /// card that was deliberately ended.
-    private var showsLiveActivity = false
-    private var idleEndTask: Task<Void, Never>?
-    private var lifetime: ActivityLifetime?
-
-    private enum ActivityLifetime: Equatable {
-        case stalled
-        case paused
-    }
-
     private static let liveReconnectLimit = 5
-    private static let stalledActivityTimeout: TimeInterval = 120
-    private static let pausedActivityTimeout: TimeInterval = 15 * 60
 
     init() {
         configureAudioSession()
         configureNowPlaying()
         configureNotifications()
-        configureLiveActivityCommands()
         startTicker()
     }
 
     isolated deinit {
         ticker?.cancel()
         interruptionResumeTask?.cancel()
-        idleEndTask?.cancel()
         let center = NotificationCenter.default
         for observer in observers {
             center.removeObserver(observer)
@@ -106,10 +88,7 @@ final class PlaybackCoordinator {
         self.duration = nil
         self.reconnectAttempt = 0
         self.wantsToPlay = true
-        self.showsLiveActivity = true
-        cancelIdleEnd()
         cancelSleepTimer()
-        LibraryStore.shared.recordLastPlayback(source: source, wasPlaying: true)
 
         let item = AVPlayerItem(url: source.audioURL)
         player.replaceCurrentItem(with: item)
@@ -127,20 +106,15 @@ final class PlaybackCoordinator {
 
         loadArtwork()
         updateNowPlaying()
-        updateLiveActivity()
     }
 
     func resume() {
         guard source != nil else { return }
         wantsToPlay = true
-        showsLiveActivity = true
-        cancelIdleEnd()
         activateAudioSession()
         player.play()
         state = .loading
-        persistLastPlayback()
         updateNowPlaying()
-        updateLiveActivity()
     }
 
     func pause() {
@@ -148,9 +122,7 @@ final class PlaybackCoordinator {
         player.pause()
         state = source == nil ? .idle : .paused
         persistProgress()
-        persistLastPlayback()
         updateNowPlaying()
-        updateLiveActivity()
     }
 
     func togglePlayPause() {
@@ -239,15 +211,6 @@ final class PlaybackCoordinator {
         }
     }
 
-    private func configureLiveActivityCommands() {
-        PlaybackCommandBus.handler = { [weak self] command in
-            switch command {
-            case .togglePlayPause:
-                self?.handleLiveActivityToggle()
-            }
-        }
-    }
-
     private func configureNotifications() {
         let center = NotificationCenter.default
 
@@ -324,18 +287,6 @@ final class PlaybackCoordinator {
                 }
             }
         )
-
-        observers.append(
-            center.addObserver(
-                forName: UIApplication.willTerminateNotification,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self?.endLiveActivity()
-                }
-            }
-        )
     }
 
     private func startTicker() {
@@ -397,8 +348,6 @@ final class PlaybackCoordinator {
         updateSleepTimer()
         persistProgressIfDue()
         updateNowPlaying()
-        updateLiveActivity()
-        updateActivityLifetime()
     }
 
     /// Records progress at most every 5 seconds while a recording plays.
@@ -462,13 +411,11 @@ final class PlaybackCoordinator {
         case .began:
             isInterrupted = true
             wasPlayingBeforeInterruption = wantsToPlay
-            // Another app has taken the audio session. Present as paused and
-            // dismiss the card straight away, but keep `wantsToPlay` so
-            // `.ended` can resume (which requests a fresh card).
+            // Another app has taken the audio session. Present as paused but
+            // keep `wantsToPlay` so `.ended` can resume.
             if wantsToPlay {
                 state = .paused
                 updateNowPlaying()
-                endLiveActivity()
             }
         case .ended:
             isInterrupted = false
@@ -521,11 +468,9 @@ final class PlaybackCoordinator {
 
                 self.player.play()
                 self.state = .loading
-                self.showsLiveActivity = true
                 self.wasPlayingBeforeInterruption = false
                 self.isInterrupted = false
                 self.updateNowPlaying()
-                self.updateLiveActivity()
                 return
             }
 
@@ -535,9 +480,7 @@ final class PlaybackCoordinator {
             self.isInterrupted = false
             self.wasPlayingBeforeInterruption = false
             self.state = self.source == nil ? .idle : .paused
-            self.persistLastPlayback()
             self.updateNowPlaying()
-            self.updateLiveActivity()
         }
     }
 
@@ -566,11 +509,6 @@ final class PlaybackCoordinator {
             LibraryStore.shared.saveNow()
         }
         updateNowPlaying()
-        updateLiveActivity()
-        if !isLive {
-            endLiveActivity()
-        }
-        persistLastPlayback()
     }
 
     private func handleItemFailure() {
@@ -581,16 +519,13 @@ final class PlaybackCoordinator {
         guard case .live(let guide) = source else {
             state = .failed("Playback failed")
             updateNowPlaying()
-            endLiveActivity()
             return
         }
 
         guard reconnectAttempt < Self.liveReconnectLimit else {
             wantsToPlay = false
             state = .failed("Stream unavailable")
-            persistLastPlayback()
             updateNowPlaying()
-            endLiveActivity()
             return
         }
 
@@ -619,121 +554,7 @@ final class PlaybackCoordinator {
             guard let self, self.artworkURL == artworkURL else { return }
             self.currentArtwork = image
             self.updateNowPlaying()
-            self.updateLiveActivity()
         }
-    }
-
-    private func updateLiveActivity() {
-        guard showsLiveActivity else { return }
-        liveActivity.update(
-            source: source,
-            isPlaying: state == .playing,
-            elapsed: elapsed,
-            duration: duration,
-            artwork: currentArtwork
-        )
-    }
-
-    /// Deliberately removes the Live Activity. `showsLiveActivity` stays false
-    /// so the polling ticker doesn't immediately request a replacement.
-    private func endLiveActivity() {
-        showsLiveActivity = false
-        cancelIdleEnd()
-        Task { await liveActivity.end() }
-    }
-
-    /// Ends a card that has been sitting idle for too long on its own, so a
-    /// paused or stalled session can't hang around indefinitely.
-    private func updateActivityLifetime() {
-        guard showsLiveActivity, source != nil else {
-            cancelIdleEnd()
-            return
-        }
-
-        let desired: ActivityLifetime?
-        if state == .playing || isInterrupted {
-            desired = nil
-        } else if wantsToPlay {
-            desired = .stalled
-        } else {
-            desired = .paused
-        }
-
-        guard desired != lifetime else { return }
-        cancelIdleEnd()
-        lifetime = desired
-        guard let desired else { return }
-
-        let timeout = desired == .paused
-            ? Self.pausedActivityTimeout
-            : Self.stalledActivityTimeout
-
-        idleEndTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(timeout))
-            guard let self, !Task.isCancelled else { return }
-            guard self.state != .playing else { return }
-            self.wantsToPlay = false
-            self.state = self.source == nil ? .idle : .paused
-            self.persistLastPlayback()
-            self.nowPlaying.clear()
-            self.endLiveActivity()
-        }
-    }
-
-    private func cancelIdleEnd() {
-        idleEndTask?.cancel()
-        idleEndTask = nil
-        lifetime = nil
-    }
-
-    private func persistLastPlayback() {
-        LibraryStore.shared.recordLastPlayback(source: source, wasPlaying: wantsToPlay)
-    }
-
-    // MARK: - Live Activity commands
-
-    private func handleLiveActivityToggle() {
-        restoreLastSourceIfNeeded()
-        guard source != nil else {
-            endLiveActivity()
-            return
-        }
-        togglePlayPause()
-    }
-
-    /// After the app has been terminated, the player is empty but the Live
-    /// Activity may still be on screen. Rebuild just enough state for the tap
-    /// to act on the source the user was last listening to.
-    private func restoreLastSourceIfNeeded() {
-        guard source == nil, let stored = LibraryStore.shared.lastPlayback else { return }
-
-        source = stored.source
-        artworkURL = stored.source.artworkURL
-        currentArtwork = nil
-        elapsed = 0
-        duration = nil
-        reconnectAttempt = 0
-        wantsToPlay = stored.wasPlaying
-        showsLiveActivity = true
-
-        player.replaceCurrentItem(with: AVPlayerItem(url: stored.source.audioURL))
-        if let saved = LibraryStore.shared.savedPosition(for: stored.source), saved > 15 {
-            pendingSeek = saved
-        } else {
-            pendingSeek = nil
-        }
-
-        if stored.wasPlaying {
-            activateAudioSession()
-            player.play()
-            state = .loading
-        } else {
-            state = .paused
-        }
-
-        loadArtwork()
-        updateNowPlaying()
-        updateLiveActivity()
     }
 
     private func updateNowPlaying() {

@@ -50,7 +50,6 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		1A0000000000000000000002 /* 4ZZZ */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = 4ZZZ; sourceTree = "<group>"; };
 		2B0000000000000000000002 /* 4ZZZWidgets */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = 4ZZZWidgets; sourceTree = "<group>"; };
-		2B0000000000000000000003 /* Shared */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Shared; sourceTree = "<group>"; };
 		3C0000000000000000000002 /* 4ZZZTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = 4ZZZTests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
@@ -84,7 +83,6 @@
 			children = (
 				1A0000000000000000000002 /* 4ZZZ */,
 				2B0000000000000000000002 /* 4ZZZWidgets */,
-				2B0000000000000000000003 /* Shared */,
 				3C0000000000000000000002 /* 4ZZZTests */,
 				1A0000000000000000000005 /* Products */,
 			);
@@ -119,7 +117,6 @@
 			);
 			fileSystemSynchronizedGroups = (
 				1A0000000000000000000002 /* 4ZZZ */,
-				2B0000000000000000000003 /* Shared */,
 			);
 			name = 4ZZZ;
 			packageProductDependencies = (
@@ -142,7 +139,6 @@
 			);
 			fileSystemSynchronizedGroups = (
 				2B0000000000000000000002 /* 4ZZZWidgets */,
-				2B0000000000000000000003 /* Shared */,
 			);
 			name = 4ZZZWidgets;
 			packageProductDependencies = (

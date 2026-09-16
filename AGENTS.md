@@ -32,13 +32,15 @@ xcodebuild -project 4ZZZ.xcodeproj -target 4ZZZ -sdk iphoneos \
 
 - `4ZZZ.xcodeproj/project.pbxproj` is **hand-written** (no generator). Source
   folders use `PBXFileSystemSynchronizedRootGroup`, so new `.swift` files under
-  `4ZZZ/`, `4ZZZWidgets/`, `Shared/`, `4ZZZTests/` compile automatically — no
-  pbxproj edit needed for ordinary files. New *targets* or build-setting changes
-  must be edited by hand.
-- `Shared/` compiles into **both** the app and the widget; it holds the Live
-  Activity payload (`PlaybackActivityAttributes`) and the Live Activity's
-  `TogglePlaybackIntent`/`PlaybackCommandBus`. Keep app-only types out — the
-  intent talks to the player through the command bus, never directly.
+  `4ZZZ/`, `4ZZZWidgets/`, `4ZZZTests/` compile automatically — no pbxproj edit
+  needed for ordinary files. New *targets* or build-setting changes must be
+  edited by hand. There is currently no `Shared/` group; if shared app/widget
+  code is needed again, migrate `PlaybackSource`/model types into one and add it
+  to both targets' `fileSystemSynchronizedGroups`.
+- The `4ZZZWidgets` extension target is retained for future widgets but its
+  bundle is currently empty. `NSSupportsLiveActivities` stays declared so a Live
+  Activity can be reintroduced without project changes; the previous
+  implementation lives in git history (`2a3a2ea`).
 - `Config/Info.plist` and `Config/Widgets-Info.plist` are partial plists merged
   with `GENERATE_INFOPLIST_FILE = YES`. Array-valued keys (`UIBackgroundModes`,
   `NSSupportsLiveActivities`) do **not** work via `INFOPLIST_KEY_*` — they must go
@@ -63,8 +65,6 @@ xcodebuild -project 4ZZZ.xcodeproj -target 4ZZZ -sdk iphoneos \
 - Swift 6 concurrency workarounds already in place — preserve them:
   - `MPMediaItemArtwork`'s handler is called on a MediaPlayer queue, so it is built
     by a `nonisolated` function (`PlaybackCoordinator.makeArtwork`).
-  - ActivityKit's `Activity` is not `Sendable`; `LiveActivityController` uses
-    `@preconcurrency import ActivityKit`.
   - Notification observers hop via `MainActor.assumeIsolated` and must only pass
     `Sendable` values across the boundary.
 - Tests use Swift Testing (`import Testing`, `@Test`, `#expect`) and launch the app
