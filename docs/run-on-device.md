@@ -1,16 +1,22 @@
 # Running 4ZZZ on a real iPhone (free Personal Team)
 
 This app has **no entitlements files and no App Groups**, so it needs nothing
-beyond standard automatic signing. Background audio and Live Activities work
-under a free Apple ID (Personal Team).
+beyond standard automatic signing. Background audio works under a free Apple ID
+(Personal Team).
 
-Current repo state this guide assumes:
+Current repo state (already set up on this Mac):
 
 - All targets use `CODE_SIGN_STYLE = Automatic`.
-- No `DEVELOPMENT_TEAM` is set anywhere in `4ZZZ.xcodeproj/project.pbxproj`.
+- The app and widget targets set `DEVELOPMENT_TEAM = P2FL6PKL52` (Personal Team,
+  `iryan2@gmail.com`); the test target has no team because tests run on the
+  simulator.
 - Bundle IDs: app `com.imr.fourzzz`, widget `com.imr.fourzzz.Widgets`,
   tests `com.imr.fourzzzTests`.
-- No Apple ID is signed into Xcode and there are no codesigning identities yet.
+- An `Apple Development: iryan2@gmail.com (4JTMT9Y383)` identity is installed
+  (valid to Sep 2027) and Xcode is signed in to the same Apple ID.
+
+The setup steps below are therefore already applied here; they are kept as
+instructions for a fresh machine or a new developer.
 
 ## Prerequisites (you, on Mac and iPhone)
 
@@ -29,7 +35,7 @@ Current repo state this guide assumes:
    - In Xcode, open the run-destination menu; your iPhone should be listed.
    - If it shows as "unavailable", the Developer Mode step above still needs doing.
 
-## Then (assistant / manual edits)
+## Then (already applied here)
 
 5. **Discover your Team ID** from the installed provisioning profile:
 
@@ -68,40 +74,84 @@ Current repo state this guide assumes:
      provisioning profiles. Xcode may prompt for the Mac login password.
 
 9. On the iPhone: Settings -> General -> **VPN & Device Management** ->
-   trust your developer certificate. Then launch the app.
+   tap your developer certificate -> **Trust** (see below). Then launch the app.
+
+## Trusting the developer certificate
+
+The **only** manual step after a fresh install. Doing it via the command line is
+not possible - the trust decision is made on-device.
+
+1. On the iPhone, open **Settings -> General -> VPN & Device Management**.
+2. Under *Developer App*, tap **Apple Development: iryan2@gmail.com (4JTMT9Y383)**.
+3. Tap **Trust "Apple Development: …"**, then **Trust** again to confirm.
+4. Launch 4ZZZ.
+
+If the app refuses to launch with *"its profile has not been explicitly trusted
+by the user"*, this is what is missing. Note the error says *profile*, but iOS
+actually records trust against the **signing certificate**:
+
+- Trust is per certificate, **not** per Apple ID or email. Using the same Apple ID
+  from another Mac still needs the new certificate trusted.
+- The Personal Team certificate is valid for **1 year** (this one to Sep 2027), so
+  once trusted it survives the **weekly 7-day profile refreshes** without
+  re-trusting - as long as Xcode reuses the same certificate.
+- It must be redone only if Xcode rolls/reissues the certificate (e.g. after the
+  old one expires or is revoked) or if you remove trust on the iPhone.
+
+There is no way to trust a developer/email permanently. To remove the per-device
+trust step entirely you need a **paid Apple Developer Program membership** and
+distribution - e.g. TestFlight or an Ad Hoc build - which installs without the
+"untrusted developer" prompt (TestFlight builds last 90 days, profiles 1 year).
 
 ## Free-account limits (important)
 
-- Certificates/profiles **expire every 7 days**; re-run from Xcode each week to
-  re-sign the app. It will stop launching once the profile expires.
+- **Provisioning profiles expire every 7 days**; re-run the build each week to
+  re-sign the app - it stops launching once the profile expires ("4ZZZ is no
+  longer available"). The signing **certificate** lasts 1 year.
 - Up to **3 sideloaded apps** and **10 App IDs per 7 days** (app + widget = 2 IDs).
 - Per `AGENTS.md`, `swiftc -typecheck` does **not** catch several Swift 6
   concurrency errors that a real build does. Use a real device build as the
   source of truth.
 
+## Weekly refresh (the usual case)
+
+Once the trust step above has been done, re-signing each week is one line - also
+in the README under *Refreshing after the 7-day expiry*. Replace `Memex` with your
+device name (`xcrun devicectl list devices`) and make sure the phone is unlocked
+and reachable (Wi-Fi is fine once paired):
+
+```sh
+xcodebuild -project 4ZZZ.xcodeproj -scheme 4ZZZ -configuration Debug -destination 'platform=iOS,name=Memex' -derivedDataPath build-device -allowProvisioningUpdates build && xcrun devicectl device install app --device Memex build-device/Build/Products/Debug-iphoneos/4ZZZ.app && xcrun devicectl device process launch --device Memex com.imr.fourzzz
+```
+
 ## Command-line alternative (after signing in to Xcode)
+
+Build only:
 
 ```sh
 xcodebuild -project 4ZZZ.xcodeproj -scheme 4ZZZ -configuration Debug \
   -destination 'platform=iOS,name=<iPhone name>' \
-  -allowProvisioningUpdates build
+  -derivedDataPath build-device -allowProvisioningUpdates build
 ```
 
-Then install the built `.app`:
+Then install and launch the built `.app`:
 
 ```sh
 xcrun devicectl list devices
 xcrun devicectl device install app --device <DEVICE_ID> \
-  build/Build/Products/Debug-iphoneos/4ZZZ.app
+  build-device/Build/Products/Debug-iphoneos/4ZZZ.app
+xcrun devicectl device process launch --device <DEVICE_ID> com.imr.fourzzz
 ```
 
 Notes:
 
 - `-derivedDataPath` is only valid with `-scheme`, never with `-target`.
+- `--device` accepts either the device **name** (`Memex`) or the CoreDevice
+  identifier from `xcrun devicectl list devices`.
 - The `-allowProvisioningUpdates` flag lets Xcode manage the free profile
   non-interactively, but you must already be signed in via Xcode Settings.
-- If you set `DEVELOPMENT_TEAM` in step 6, you can add
-  `-destination 'generic/platform=iOS'` for a device SDK build.
+- `DEVELOPMENT_TEAM` is already set, so `-destination 'generic/platform=iOS'`
+  also works for a device SDK build.
 
 ## Wireless install (no cable)
 
@@ -121,11 +171,11 @@ install and launch entirely wirelessly:
 # Build for the device (id is the UDID, not the CoreDevice identifier)
 xcodebuild -project 4ZZZ.xcodeproj -scheme 4ZZZ -configuration Debug \
   -destination 'platform=iOS,id=<UDID>' \
-  -derivedDataPath build -allowProvisioningUpdates build
+  -derivedDataPath build-device -allowProvisioningUpdates build
 
 # Install over the network
 xcrun devicectl device install app --device <CORE_DEVICE_ID> \
-  build/Build/Products/Debug-iphoneos/4ZZZ.app
+  build-device/Build/Products/Debug-iphoneos/4ZZZ.app
 
 # Launch it
 xcrun devicectl device process launch --device <CORE_DEVICE_ID> com.imr.fourzzz
@@ -148,9 +198,13 @@ Notes:
 
 ## Troubleshooting
 
-- **"Untrusted Developer"** on launch -> do step 9.
+- **"4ZZZ is no longer available"** (profile expired; iOS drops the app) -> run the
+  weekly refresh one-liner; the 7-day clock resets.
+- **"Untrusted Developer"** / *"its profile has not been explicitly trusted"* on
+  launch -> trust the developer certificate on the iPhone (see above).
 - **"Unable to install ... requires a development team"** -> `DEVELOPMENT_TEAM`
   missing for the widget target too, not just the app.
-- **Profile expired** -> plug in and Cmd-R again; 7-day clock resets.
+- **Launch denied after a successful install** -> almost always the trust step,
+  not a signing fault; the certificate is otherwise valid for a year.
 - **Simulator build still works regardless** -> these signing changes do not
   affect simulator builds, which skip codesigning entirely.

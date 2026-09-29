@@ -16,6 +16,31 @@ project with a view to 4ZZZ releasing it through their own channels.
 2. Select the **4ZZZ** target → *Signing & Capabilities* → choose a Team.
 3. Select a device or simulator and run (⌘R).
 
+### Refreshing after the 7-day expiry
+
+A free Personal Team signs the app for only 7 days; once it expires iOS shows
+"4ZZZ is no longer available" and it won't launch. Rebuild, reinstall and relaunch
+in one line (replace `Memex` with the device name from
+`xcrun devicectl list devices`; the device must be unlocked and reachable):
+
+```sh
+xcodebuild -project 4ZZZ.xcodeproj -scheme 4ZZZ -configuration Debug -destination 'platform=iOS,name=Memex' -derivedDataPath build-device -allowProvisioningUpdates build && xcrun devicectl device install app --device Memex build-device/Build/Products/Debug-iphoneos/4ZZZ.app && xcrun devicectl device process launch --device Memex com.imr.fourzzz
+```
+
+After a reinstall iOS may refuse to launch with *"profile has not been explicitly
+trusted by the user"*. Trust the developer once on the iPhone:
+
+1. **Settings → General → VPN & Device Management**.
+2. Under *Developer App*, tap **Apple Development: iryan2@gmail.com (…)**.
+3. Tap **Trust "Apple Development: …"**, then **Trust** again to confirm.
+4. Launch the app.
+
+Trust is recorded per signing certificate, not per Apple ID, so it survives the
+weekly 7-day profile refreshes as long as the same Apple Development certificate
+is reused (yours is valid until Sep 2027). It only needs redoing if Xcode issues a
+new certificate or you remove trust. See `docs/run-on-device.md` for the full
+signing walkthrough.
+
 ## Data sources
 
 Everything comes from 4ZZZ's own public infrastructure. There is no backend of
