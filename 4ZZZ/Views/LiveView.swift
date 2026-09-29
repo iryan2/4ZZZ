@@ -49,7 +49,7 @@ struct LiveView: View {
     private var onAirCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Button {
-                player.play(.live(channel))
+                player.play(.live(channel), liveShow: position.current.map(LiveShowInfo.init))
             } label: {
                 onAirSummary
             }

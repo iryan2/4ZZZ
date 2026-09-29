@@ -32,6 +32,9 @@ final class PlaybackCoordinator {
     }
 
     private(set) var source: PlaybackSource?
+    /// The show currently airing on the live stream, refreshed from the guide
+    /// schedule while live playback is active. `nil` when not playing live.
+    private(set) var liveShow: LiveShowInfo?
     private(set) var state: State = .idle
     private(set) var elapsed: TimeInterval = 0
     private(set) var duration: TimeInterval?
@@ -58,9 +61,11 @@ final class PlaybackCoordinator {
     private var pendingSeek: TimeInterval?
     private var lastProgressSave = Date.distantPast
     private var ticker: Task<Void, Never>?
+    private var liveShowTask: Task<Void, Never>?
     private var observers: [NSObjectProtocol] = []
 
     private static let liveReconnectLimit = 5
+    private static let liveShowRefreshInterval: Duration = .seconds(60)
 
     init() {
         configureAudioSession()
@@ -71,6 +76,7 @@ final class PlaybackCoordinator {
 
     isolated deinit {
         ticker?.cancel()
+        liveShowTask?.cancel()
         interruptionResumeTask?.cancel()
         let center = NotificationCenter.default
         for observer in observers {
@@ -80,15 +86,21 @@ final class PlaybackCoordinator {
 
     // MARK: - Public controls
 
-    func play(_ source: PlaybackSource) {
+    func play(_ source: PlaybackSource, liveShow liveShowInfo: LiveShowInfo? = nil) {
         self.source = source
-        self.artworkURL = source.artworkURL
+        self.liveShow = source.isLive ? liveShowInfo : nil
+        self.artworkURL = source.artworkURL ?? self.liveShow?.artworkURL
         self.currentArtwork = nil
         self.elapsed = 0
         self.duration = nil
         self.reconnectAttempt = 0
         self.wantsToPlay = true
         cancelSleepTimer()
+
+        liveShowTask?.cancel()
+        if source.isLive {
+            startLiveShowRefresh(source.guide)
+        }
 
         let item = AVPlayerItem(url: source.audioURL)
         player.replaceCurrentItem(with: item)
@@ -537,9 +549,38 @@ final class PlaybackCoordinator {
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(delay))
             guard let self, self.wantsToPlay else { return }
-            self.play(.live(guide))
+            self.play(.live(guide), liveShow: self.liveShow)
             self.reconnectAttempt = attempt + 1
         }
+    }
+
+    // MARK: - Live show metadata
+
+    /// Keeps `liveShow` in step with the guide schedule while a live stream is
+    /// playing. The `AirNetClient` guide cache means most polls are served
+    /// locally; only a schedule change reaches the network.
+    private func startLiveShowRefresh(_ guide: Guide) {
+        liveShowTask?.cancel()
+        liveShowTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                await self?.refreshLiveShow(guide)
+                try? await Task.sleep(for: Self.liveShowRefreshInterval)
+            }
+        }
+    }
+
+    private func refreshLiveShow(_ guide: Guide) async {
+        guard case .live(let playingGuide) = source, playingGuide == guide else { return }
+        guard let entries = try? await AirNetClient.shared.guide(guide) else { return }
+        guard case .live(let currentGuide) = source, currentGuide == guide else { return }
+
+        let info = ScheduleResolver.position(in: entries).current.map(LiveShowInfo.init)
+        guard info != liveShow else { return }
+
+        liveShow = info
+        artworkURL = info?.artworkURL
+        currentArtwork = nil
+        loadArtwork()
     }
 
     // MARK: - Now Playing
@@ -567,8 +608,8 @@ final class PlaybackCoordinator {
         let artist: String
         switch source {
         case .live(let guide):
-            title = "Live — \(guide.displayName)"
-            artist = "4ZZZ"
+            title = "Live — \(liveShow?.name ?? guide.displayName)"
+            artist = guide.displayName
         case .episode(_, let showName, _, let episodeTitle, _, _, _):
             title = episodeTitle ?? showName
             artist = showName

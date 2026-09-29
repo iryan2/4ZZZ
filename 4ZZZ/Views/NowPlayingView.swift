@@ -51,9 +51,13 @@ struct NowPlayingView: View {
         }
     }
 
+    private var artworkURL: URL? {
+        player.source?.artworkURL ?? player.liveShow?.artworkURL
+    }
+
     private var artwork: some View {
         Group {
-            if let url = player.source?.artworkURL {
+            if let url = artworkURL {
                 AsyncImage(url: url) { image in
                     image.resizable().aspectRatio(contentMode: .fit)
                 } placeholder: {
@@ -228,7 +232,9 @@ struct NowPlayingView: View {
 
     private var title: String {
         switch player.source {
-        case .live(let guide): return "Live — \(guide.displayName)"
+        case .live(let guide):
+            guard let name = player.liveShow?.name else { return guide.displayName }
+            return "\(guide.displayName) — \(name)"
         case .episode(_, let showName, _, let episodeTitle, _, _, _): return episodeTitle ?? showName
         case nil: return "Nothing playing"
         }
@@ -236,7 +242,7 @@ struct NowPlayingView: View {
 
     private var subtitle: String {
         switch player.source {
-        case .live: return "4ZZZ Community Radio"
+        case .live(let guide): return player.liveShow?.broadcasters ?? guide.displayName
         case .episode(_, let showName, _, _, _, _, _): return showName
         case nil: return ""
         }

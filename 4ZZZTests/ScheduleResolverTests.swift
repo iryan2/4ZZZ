@@ -57,4 +57,26 @@ struct ScheduleResolverTests {
         #expect(position.current == nil)
         #expect(position.next == nil)
     }
+
+    @Test("Live show info carries name, broadcasters and artwork")
+    func liveShowInfo() {
+        let smallArt = URL(string: "https://example.com/small.jpg")
+        let entry = ScheduleEntry(
+            guideId: .digital,
+            day: 6,
+            start: "22:00:00",
+            duration: 3600,
+            name: "Local Glow",
+            broadcasters: "<p>Jane &amp; Co</p>",
+            slug: "local-glow",
+            profileImage: nil,
+            profileImageSmall: smallArt,
+            onairnow: true
+        )
+
+        let info = LiveShowInfo(entry)
+        #expect(info.name == "Local Glow")
+        #expect(info.broadcasters == "Jane & Co")
+        #expect(info.artworkURL == smallArt)
+    }
 }

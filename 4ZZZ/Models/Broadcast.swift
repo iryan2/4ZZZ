@@ -21,6 +21,23 @@ enum Guide: String, Codable, Sendable, CaseIterable, Identifiable {
     }
 }
 
+/// Metadata for the show currently airing on a live stream. Resolved from the
+/// guide schedule and owned by `PlaybackCoordinator`, not part of
+/// `PlaybackSource` (which only describes what to play).
+struct LiveShowInfo: Equatable, Sendable {
+    var name: String
+    var broadcasters: String?
+    var artworkURL: URL?
+}
+
+extension LiveShowInfo {
+    init(_ entry: ScheduleEntry) {
+        self.name = entry.name
+        self.broadcasters = entry.displayBroadcasters
+        self.artworkURL = entry.artworkURL
+    }
+}
+
 enum PlaybackSource: Equatable, Sendable, Codable {
     case live(Guide)
     case episode(
