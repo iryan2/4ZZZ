@@ -31,15 +31,6 @@ struct LiveView: View {
                     onAirCard
                 }
 
-                Section {
-                    Button {
-                        player.play(.live(channel))
-                    } label: {
-                        Label("Play \(channel.displayName)", systemImage: "play.circle.fill")
-                            .font(.headline)
-                    }
-                }
-
                 if let errorMessage {
                     Section {
                         Text(errorMessage)
@@ -57,29 +48,13 @@ struct LiveView: View {
 
     private var onAirCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if isLoading && entries.isEmpty {
-                ProgressView()
-                    .frame(maxWidth: .infinity, alignment: .center)
-            } else if let current = position.current {
-                HStack(spacing: 14) {
-                    scheduleArtwork(current)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Label("On air now", systemImage: "dot.radiowaves.left.and.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.red)
-                        Text(current.name)
-                            .font(.headline)
-                        if let broadcasters = current.displayBroadcasters {
-                            Text(broadcasters)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            } else {
-                Label("Nothing scheduled right now", systemImage: "moon.zzz")
-                    .foregroundStyle(.secondary)
+            Button {
+                player.play(.live(channel))
+            } label: {
+                onAirSummary
             }
+            .buttonStyle(.plain)
+            .accessibilityHint("Plays the live stream")
 
             if let next = position.next, next.id != position.current?.id {
                 Divider()
@@ -100,6 +75,49 @@ struct LiveView: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    private var onAirSummary: some View {
+        Group {
+            if isLoading && entries.isEmpty {
+                ProgressView()
+                    .frame(maxWidth: .infinity, alignment: .center)
+            } else if let current = position.current {
+                HStack(spacing: 14) {
+                    scheduleArtwork(current)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Label("On air now", systemImage: "dot.radiowaves.left.and.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.red)
+                        Text(current.name)
+                            .font(.headline)
+                        if let broadcasters = current.displayBroadcasters {
+                            Text(broadcasters)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "play.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.tint)
+                }
+            } else {
+                Label("Nothing scheduled right now", systemImage: "moon.zzz")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(onAirAccessibilityLabel)
+    }
+
+    private var onAirAccessibilityLabel: String {
+        if let current = position.current {
+            return "Play \(channel.displayName), on air now \(current.name)"
+        }
+        return "Play \(channel.displayName)"
     }
 
     private func scheduleArtwork(_ entry: ScheduleEntry) -> some View {

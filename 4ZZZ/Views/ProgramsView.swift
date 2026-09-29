@@ -124,7 +124,9 @@ struct ProgramsView: View {
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 2)
+            .contentShape(Rectangle())
             .accessibilityElement(children: .combine)
             .accessibilityLabel(
                 "Resume \(entry.title ?? entry.showName), \(Int(entry.fraction * 100)) percent played"
