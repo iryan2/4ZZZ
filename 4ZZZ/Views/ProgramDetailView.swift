@@ -9,6 +9,7 @@ struct ProgramDetailView: View {
     @State private var program: Program?
     @State private var episodes: [Episode] = []
     @State private var keywords: [String] = []
+    @State private var usualTimes: [String] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
 
@@ -86,6 +87,16 @@ struct ProgramDetailView: View {
                     .foregroundStyle(.secondary)
             }
 
+            if !usualTimes.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "clock")
+                    Text(usualTimes.joined(separator: "  ·  "))
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Usual time \(usualTimes.joined(separator: ", "))")
+            }
+
             KeywordLine(keywords: keywords)
 
             if let description = displayedProgram.displayDescription {
@@ -147,10 +158,13 @@ struct ProgramDetailView: View {
             async let programTask = AirNetClient.shared.program(slug: slug)
             async let episodesTask = AirNetClient.shared.episodes(slug: slug)
             async let keywordsTask = AirNetClient.shared.programKeywords()
+            async let guideTask = AirNetClient.shared.guide(displayedProgram.guide)
             let (loadedProgram, loadedEpisodes) = try await (programTask, episodesTask)
             program = loadedProgram
             episodes = loadedEpisodes.sorted { $0.start > $1.start }
             keywords = ProgramTagOverrides.tags(for: slug, grid: (try? await keywordsTask) ?? [:])
+            let guide = (try? await guideTask) ?? []
+            usualTimes = ScheduleResolver.weeklySlots(for: slug, in: guide).map(StationFormat.time(from:))
         } catch {
             errorMessage = error.localizedDescription
         }

@@ -35,6 +35,40 @@ struct StationFormatTests {
         )
         #expect(StationFormat.time(from: entry) == "Sat 22:00")
     }
+
+    private func entry(day: Int, start: String, slug: String?, guide: Guide = .fm) -> ScheduleEntry {
+        ScheduleEntry(
+            guideId: guide,
+            day: day,
+            start: start,
+            duration: 3600,
+            name: "Show",
+            broadcasters: nil,
+            slug: slug,
+            profileImage: nil,
+            profileImageSmall: nil,
+            onairnow: nil
+        )
+    }
+
+    @Test("Weekly slots for a slug are filtered and ordered by day then time")
+    func weeklySlots() {
+        let entries = [
+            entry(day: 6, start: "22:00:00", slug: "local-glow"),
+            entry(day: 2, start: "09:00:00", slug: "local-glow"),
+            entry(day: 4, start: "12:00:00", slug: "other"),
+            entry(day: 1, start: "08:00:00", slug: nil),
+        ]
+        let slots = ScheduleResolver.weeklySlots(for: "local-glow", in: entries)
+        #expect(slots.map(\.day) == [2, 6])
+        #expect(slots.map(StationFormat.time(from:)) == ["Tue 09:00", "Sat 22:00"])
+    }
+
+    @Test("Weekly slots are empty when the slug is unknown")
+    func weeklySlotsUnknownSlug() {
+        let entries = [entry(day: 6, start: "22:00:00", slug: "local-glow")]
+        #expect(ScheduleResolver.weeklySlots(for: "missing", in: entries).isEmpty)
+    }
 }
 
 @Suite("Library model")

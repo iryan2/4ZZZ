@@ -61,6 +61,13 @@ enum ScheduleResolver {
         weekMinutes(day: entry.day, startMinutes: entry.startMinutes)
     }
 
+    /// Weekly slots belonging to a program slug, earliest in the week first.
+    static func weeklySlots(for slug: String, in entries: [ScheduleEntry]) -> [ScheduleEntry] {
+        entries
+            .filter { $0.slug == slug }
+            .sorted { weekMinutes($0) < weekMinutes($1) }
+    }
+
     static func position(
         in entries: [ScheduleEntry],
         at date: Date = Date()

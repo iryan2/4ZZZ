@@ -5,11 +5,17 @@ struct LiveView: View {
 
     @State private var channel: Guide = .fm
     @State private var entries: [ScheduleEntry] = []
+    @State private var keywordsBySlug: [String: [String]] = [:]
     @State private var isLoading = false
     @State private var errorMessage: String?
 
     private var position: (current: ScheduleEntry?, next: ScheduleEntry?) {
         ScheduleResolver.position(in: entries)
+    }
+
+    private var currentKeywords: [String] {
+        guard let slug = position.current?.slug else { return [] }
+        return ProgramTagOverrides.tags(for: slug, grid: keywordsBySlug)
     }
 
     var body: some View {
@@ -96,6 +102,7 @@ struct LiveView: View {
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
+                        KeywordLine(keywords: currentKeywords)
                     }
                     Spacer(minLength: 8)
                     Image(systemName: "play.circle.fill")
@@ -144,7 +151,10 @@ struct LiveView: View {
         isLoading = true
         errorMessage = nil
         do {
-            entries = try await AirNetClient.shared.guide(channel)
+            async let entriesTask = AirNetClient.shared.guide(channel)
+            async let keywordsTask = AirNetClient.shared.programKeywords()
+            entries = try await entriesTask
+            keywordsBySlug = (try? await keywordsTask) ?? [:]
         } catch {
             errorMessage = error.localizedDescription
         }
