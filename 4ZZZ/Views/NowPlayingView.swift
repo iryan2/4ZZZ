@@ -3,11 +3,17 @@ import SwiftUI
 
 struct NowPlayingView: View {
     @Environment(PlaybackCoordinator.self) private var player
+    @Environment(TrackIdentifier.self) private var identifier
     @Environment(\.theme) private var theme
     @Environment(\.dismiss) private var dismiss
 
     @State private var scrubPosition: Double?
     @ScaledMetric(relativeTo: .largeTitle) private var playButtonSize: CGFloat = 68
+
+    /// Song identification needs the ShazamKit App Service, which requires a paid
+    /// Apple Developer Program membership. Hidden until the app's App ID is
+    /// authorised; flip to `true` to surface it again.
+    private let songIdentificationEnabled = false
 
     private var displayedElapsed: TimeInterval {
         scrubPosition ?? player.elapsed
@@ -15,21 +21,31 @@ struct NowPlayingView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                Spacer(minLength: 8)
-                artwork
-                titleBlock
-                if player.isLive {
-                    liveBadge
-                } else {
-                    scrubber
+            GeometryReader { proxy in
+                ScrollView {
+                    VStack(spacing: 24) {
+                        Spacer(minLength: 8)
+                        artwork
+                        titleBlock
+                        if player.isLive {
+                            liveBadge
+                        } else {
+                            scrubber
+                        }
+                        transport
+                        if songIdentificationEnabled {
+                            identifySection
+                        }
+                        sleepTimerStatus
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 16)
+                    .frame(minHeight: proxy.size.height, alignment: .center)
                 }
-                transport
-                sleepTimerStatus
-                Spacer(minLength: 0)
+                .scrollBounceBehavior(.basedOnSize)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 16)
+            .onChange(of: player.source) { _, _ in identifier.reset() }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -162,6 +178,117 @@ struct NowPlayingView: View {
         }
     }
 
+    // MARK: - Identify song
+
+    @ViewBuilder
+    private var identifySection: some View {
+        switch identifier.state {
+        case .idle:
+            identifyButton
+        case .listening:
+            listeningRow
+        case .matched(let match):
+            matchCard(match)
+        case .noMatch:
+            RetryMessage(text: "Couldn't identify this track.", systemImage: "questionmark.circle") {
+                startIdentifying()
+            }
+        case .failed(let message):
+            RetryMessage(text: message, systemImage: "exclamationmark.triangle") {
+                startIdentifying()
+            }
+        }
+    }
+
+    private var identifyButton: some View {
+        Button {
+            startIdentifying()
+        } label: {
+            Label("Identify song", systemImage: "waveform")
+                .font(.subheadline.weight(.medium))
+        }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .disabled(player.source == nil)
+    }
+
+    private var listeningRow: some View {
+        HStack(spacing: 10) {
+            ProgressView()
+            Text("Listening…")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Button("Cancel") { identifier.reset() }
+                .font(.subheadline)
+        }
+    }
+
+    private func matchCard(_ match: TrackMatch) -> some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 12) {
+                matchArtwork(match.artworkURL)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(match.displayTitle)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    if let artist = match.displayArtist {
+                        Text(artist)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+
+            HStack {
+                if let url = match.appleMusicURL {
+                    Link("Open in Apple Music", destination: url)
+                        .font(.caption)
+                }
+                Spacer()
+                Button("Done") { identifier.reset() }
+                    .font(.caption)
+            }
+        }
+        .padding(12)
+        .background(
+            Color.secondary.opacity(0.1),
+            in: RoundedRectangle(cornerRadius: theme.cardCornerRadius)
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Identified \(match.displayTitle)")
+    }
+
+    private func matchArtwork(_ url: URL?) -> some View {
+        Group {
+            if let url {
+                AsyncImage(url: url) { image in
+                    image.resizable().aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    matchArtworkPlaceholder
+                }
+            } else {
+                matchArtworkPlaceholder
+            }
+        }
+        .frame(width: 48, height: 48)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var matchArtworkPlaceholder: some View {
+        Color.secondary.opacity(0.15)
+            .overlay {
+                Image(systemName: "music.note")
+                    .foregroundStyle(.secondary)
+            }
+    }
+
+    private func startIdentifying() {
+        guard let source = player.source else { return }
+        identifier.identify(source: source, elapsed: player.elapsed)
+    }
+
     private var sleepTimerStatus: some View {
         Group {
             if let remaining = player.sleepTimerRemaining {
@@ -245,6 +372,23 @@ struct NowPlayingView: View {
         case .live(let guide): return player.liveShow?.broadcasters ?? guide.displayName
         case .episode(_, let showName, _, _, _, _, _): return showName
         case nil: return ""
+        }
+    }
+}
+
+private struct RetryMessage: View {
+    let text: String
+    let systemImage: String
+    let retry: () -> Void
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Label(text, systemImage: systemImage)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button("Try again", action: retry)
+                .font(.subheadline)
         }
     }
 }

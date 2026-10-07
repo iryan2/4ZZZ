@@ -17,6 +17,7 @@ xcuserdata/
 
 # Swift Package Manager
 .build/
+/build-device
 .swiftpm/
 
 # Screenshots

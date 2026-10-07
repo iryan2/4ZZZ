@@ -109,6 +109,11 @@ distribution - e.g. TestFlight or an Ad Hoc build - which installs without the
   re-sign the app - it stops launching once the profile expires ("4ZZZ is no
   longer available"). The signing **certificate** lasts 1 year.
 - Up to **3 sideloaded apps** and **10 App IDs per 7 days** (app + widget = 2 IDs).
+- **No App Services.** A free Personal Team cannot access Certificates,
+  Identifiers & Profiles, so services such as **ShazamKit** cannot be enabled.
+  Shazam catalogue matching (the "Identify song" feature) therefore cannot work
+  on a free account; its UI stays hidden behind `NowPlayingView.songIdentificationEnabled`
+  until a paid membership is set up.
 - Per `AGENTS.md`, `swiftc -typecheck` does **not** catch several Swift 6
   concurrency errors that a real build does. Use a real device build as the
   source of truth.
