@@ -19,27 +19,37 @@ project with a view to 4ZZZ releasing it through their own channels.
 ### Refreshing after the 7-day expiry
 
 A free Personal Team signs the app for only 7 days; once it expires iOS shows
-"4ZZZ is no longer available" and it won't launch. Rebuild, reinstall and relaunch
-in one line (replace `Memex` with the device name from
-`xcrun devicectl list devices`; the device must be unlocked and reachable):
+"4ZZZ is no longer available" and it won't launch. Rebuilding and reinstalling the
+app resets the 7-day clock. Keep the iPhone unlocked and reachable (Wi-Fi is fine
+once paired), then run (replace `Memex` with the device name from
+`xcrun devicectl list devices`):
 
 ```sh
-xcodebuild -project 4ZZZ.xcodeproj -scheme 4ZZZ -configuration Debug -destination 'platform=iOS,name=Memex' -derivedDataPath build-device -allowProvisioningUpdates build && xcrun devicectl device install app --device Memex build-device/Build/Products/Debug-iphoneos/4ZZZ.app && xcrun devicectl device process launch --device Memex com.imr.fourzzz
+xcodebuild -project 4ZZZ.xcodeproj -scheme 4ZZZ -configuration Debug -destination 'platform=iOS,name=Memex' -derivedDataPath build-device -allowProvisioningUpdates build && xcrun devicectl device install app --device Memex build-device/Build/Products/Debug-iphoneos/4ZZZ.app
 ```
 
-After a reinstall iOS may refuse to launch with _"profile has not been explicitly
-trusted by the user"_. Trust the developer once on the iPhone:
+That build + install is the whole renewal. Launching is a separate step:
+
+```sh
+xcrun devicectl device process launch --device Memex com.imr.fourzzz
+```
+
+The launch is refused with *"profile has not been explicitly trusted by the user"*
+until the signing certificate is trusted on the iPhone. **This is the usual reason
+the command looks like it failed**: the build and reinstall above already
+succeeded, and iOS is only blocking the app from opening. Trust the developer once
+on the iPhone, then launch again (or just open 4ZZZ from the home screen):
 
 1. **Settings → General → VPN & Device Management**.
 2. Under _Developer App_, tap **Apple Development: iryan2@gmail.com (…)**.
 3. Tap **Trust "Apple Development: …"**, then **Trust** again to confirm.
-4. Launch the app.
+4. Run the launch command again.
 
-Trust is recorded per signing certificate, not per Apple ID, so it survives the
-weekly 7-day profile refreshes as long as the same Apple Development certificate
-is reused (yours is valid until Sep 2027). It only needs redoing if Xcode issues a
-new certificate or you remove trust. See `docs/run-on-device.md` for the full
-signing walkthrough.
+Trust is recorded per signing certificate, not per Apple ID, so it normally
+survives the weekly 7-day re-signs as long as the same Apple Development
+certificate is reused (yours is valid until Sep 2027). If the launch is refused
+again, re-do the trust step — e.g. after Xcode issues a new certificate or you
+remove trust. See `docs/run-on-device.md` for the full signing walkthrough.
 
 ## Data sources
 
