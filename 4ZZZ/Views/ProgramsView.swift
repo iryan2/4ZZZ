@@ -36,7 +36,11 @@ struct ProgramsView: View {
         NavigationStack {
             content
                 .navigationTitle("Programs")
-                .searchable(text: $query, prompt: "Search programs")
+                .searchable(
+                    text: $query,
+                    placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: "Search programs"
+                )
                 .task { await load() }
                 .refreshable { await load(force: true) }
                 .navigationDestination(for: Program.self) { program in
